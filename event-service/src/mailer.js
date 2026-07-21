@@ -8,6 +8,7 @@ if (SENDGRID_API_KEY) {
 
 // Sends a low-seats alert for an event. No-ops (with a warning) if SendGrid
 // isn't configured, so local dev without a SendGrid key doesn't crash.
+// test commit
 async function sendLowSeatsAlert(event) {
   if (!SENDGRID_API_KEY || !ALERT_EMAIL_FROM || !ALERT_EMAIL_TO) {
     console.warn('SendGrid is not configured (SENDGRID_API_KEY/ALERT_EMAIL_FROM/ALERT_EMAIL_TO); skipping low-seats alert email.');
