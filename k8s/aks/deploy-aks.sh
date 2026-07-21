@@ -93,6 +93,12 @@ kubectl create secret generic clickhouse-credentials \
   --from-literal=CLICKHOUSE_PASSWORD="$CLICKHOUSE_PASSWORD" \
   --dry-run=client -o yaml | kubectl apply -f -
 
+echo "==> Creating/updating sendgrid-credentials Secret (not stored in any yaml file)"
+kubectl create secret generic sendgrid-credentials \
+  --namespace "$NAMESPACE" \
+  --from-literal=SENDGRID_API_KEY="$SENDGRID_API_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
 echo "==> Rendering and applying service manifests"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT

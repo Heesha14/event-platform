@@ -19,9 +19,11 @@ name: Build & Deploy to AKS
 #          "subject": "repo:<org>/<repo>:ref:refs/heads/master",
 #          "audiences": ["api://AzureADTokenExchange"]
 #        }'
-#   3. Set repo Secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+#   3. Set repo Secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
+#      SENDGRID_API_KEY
 #      Set repo Variables (Settings > Actions > Variables): RESOURCE_GROUP,
-#      AKS_CLUSTER_NAME, ACR_NAME (same values as k8s/aks/aks.env).
+#      AKS_CLUSTER_NAME, ACR_NAME, ALERT_EMAIL_FROM, ALERT_EMAIL_TO,
+#      LOW_SEATS_THRESHOLD (same values as k8s/aks/aks.env).
 #
 # Note: this workflow does not run database migrations automatically. After
 # a deploy that includes schema changes, run the migration step from
@@ -127,6 +129,14 @@ jobs:
             --resource-group "${{ vars.RESOURCE_GROUP }}" \
             --overwrite-existing
 
+      - name: Create/update sendgrid-credentials Secret
+        if: matrix.service == 'event-service'
+        run: |
+          kubectl create secret generic sendgrid-credentials \
+            --namespace "$NAMESPACE" \
+            --from-literal=SENDGRID_API_KEY="${{ secrets.SENDGRID_API_KEY }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Render & apply manifest
         shell: bash
         run: |
@@ -139,6 +149,9 @@ jobs:
           )
           export ACR_LOGIN_SERVER="${{ vars.ACR_NAME }}.azurecr.io"
           export IMAGE_TAG="${{ github.sha }}"
+          export ALERT_EMAIL_FROM="${{ vars.ALERT_EMAIL_FROM }}"
+          export ALERT_EMAIL_TO="${{ vars.ALERT_EMAIL_TO }}"
+          export LOW_SEATS_THRESHOLD="${{ vars.LOW_SEATS_THRESHOLD }}"
           envsubst < "${tpl[${{ matrix.service }}]}" | kubectl apply -f -
 
       - name: Wait for rollout

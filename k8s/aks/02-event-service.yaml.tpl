@@ -9,6 +9,9 @@ data:
   DB_PORT: "1433"
   DB_NAME: "eventplatformdb"
   DB_ENCRYPT: "true"
+  ALERT_EMAIL_FROM: "${ALERT_EMAIL_FROM}"
+  ALERT_EMAIL_TO: "${ALERT_EMAIL_TO}"
+  LOW_SEATS_THRESHOLD: "${LOW_SEATS_THRESHOLD}"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -45,6 +48,11 @@ spec:
                 secretKeyRef:
                   name: azure-sql-credentials
                   key: DB_PASSWORD
+            - name: SENDGRID_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sendgrid-credentials
+                  key: SENDGRID_API_KEY
           resources:
             requests:
               cpu: 50m

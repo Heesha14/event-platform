@@ -22,3 +22,10 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_events_datetime' AND 
 BEGIN
     CREATE INDEX idx_events_datetime ON events (event_datetime);
 END;
+
+-- Tracks whether the low-seats email alert has already fired for an event, so
+-- it only sends once per dip below the threshold (reset when seats free up).
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE name = 'low_seats_alert_sent' AND object_id = OBJECT_ID('events'))
+BEGIN
+    ALTER TABLE events ADD low_seats_alert_sent BIT NOT NULL DEFAULT 0;
+END;

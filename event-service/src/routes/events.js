@@ -1,7 +1,24 @@
 const express = require('express');
 const db = require('../db');
+const { sendLowSeatsAlert } = require('../mailer');
 
 const router = express.Router();
+
+const LOW_SEATS_THRESHOLD = Number(process.env.LOW_SEATS_THRESHOLD) || 10;
+
+// Fires (or clears) the low-seats email alert for an event based on its
+// current seats_available, and persists the alert_sent flag so the email
+// only goes out once per dip below the threshold.
+async function checkLowSeatsAlert(row) {
+  const belowThreshold = row.seats_available < LOW_SEATS_THRESHOLD;
+
+  if (belowThreshold && !row.low_seats_alert_sent) {
+    await db.query('UPDATE events SET low_seats_alert_sent = 1 WHERE event_id = $1', [row.event_id]);
+    await sendLowSeatsAlert(row);
+  } else if (!belowThreshold && row.low_seats_alert_sent) {
+    await db.query('UPDATE events SET low_seats_alert_sent = 0 WHERE event_id = $1', [row.event_id]);
+  }
+}
 
 function toEventResponse(row) {
   return {
@@ -119,7 +136,9 @@ router.put('/:id', async (req, res, next) => {
        WHERE event_id = $7`,
       [title, venue, dateTime, ticketPrice, capacity, seatsAvailable, req.params.id]
     );
-    res.json(toEventResponse(result.rows[0]));
+    const updated = result.rows[0];
+    checkLowSeatsAlert(updated).catch((err) => console.error('Low-seats alert check failed:', err.message));
+    res.json(toEventResponse(updated));
   } catch (err) {
     next(err);
   }
@@ -162,7 +181,9 @@ router.patch('/:id/seats', async (req, res, next) => {
       return res.status(409).json({ error: 'Not enough seats available' });
     }
 
-    res.json(toEventResponse(result.rows[0]));
+    const updated = result.rows[0];
+    checkLowSeatsAlert(updated).catch((err) => console.error('Low-seats alert check failed:', err.message));
+    res.json(toEventResponse(updated));
   } catch (err) {
     next(err);
   }

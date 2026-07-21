@@ -10,6 +10,9 @@ data:
   DB_NAME: "eventsdb"
   DB_ENCRYPT: "false"          # local SQL Server has no valid cert; Azure uses "true" (see .env.example)
   DB_TRUST_SERVER_CERT: "true"
+  ALERT_EMAIL_FROM: ""         # low-seats SendGrid alert; left blank locally so mailer.js no-ops
+  ALERT_EMAIL_TO: ""
+  LOW_SEATS_THRESHOLD: "10"
 ---
 apiVersion: apps/v1
 kind: Deployment

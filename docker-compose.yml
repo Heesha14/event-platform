@@ -18,6 +18,10 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_ENCRYPT: "true"
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO}
+      LOW_SEATS_THRESHOLD: ${LOW_SEATS_THRESHOLD:-10}
 
   program-service:
     build: ./program-service
