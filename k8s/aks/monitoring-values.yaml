@@ -1,0 +1,63 @@
+# Trimmed-down values for kube-prometheus-stack, sized for a small AKS node
+# pool (2x Standard_D2ls_v5, ~4 vCPU / 8GiB total) that's already running
+# the app's own services. See ../aks/install-monitoring.sh.
+
+# Let ServiceMonitors/PodMonitors from any namespace/labels be picked up —
+# the app's manifests don't use the chart's own release-label convention.
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorNamespaceSelector: {}
+    podMonitorNamespaceSelector: {}
+    replicas: 1
+    retention: 5d
+    resources:
+      requests:
+        cpu: 100m
+        memory: 384Mi
+      limits:
+        cpu: 300m
+        memory: 512Mi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 8Gi
+
+grafana:
+  replicas: 1
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    limits:
+      cpu: 200m
+      memory: 384Mi
+  sidecar:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+# No alert routing configured yet — keeps footprint down, easy to enable later.
+alertmanager:
+  enabled: false
+
+# AKS doesn't expose the control-plane components these normally scrape,
+# so leaving them on just produces permanently-down targets/noise.
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false

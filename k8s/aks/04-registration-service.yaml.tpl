@@ -14,17 +14,22 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: registration-service
+  name: registration-service-${DEPLOY_COLOR}
   namespace: events-platform
+  labels:
+    app: registration-service
+    color: ${DEPLOY_COLOR}
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: registration-service
+      color: ${DEPLOY_COLOR}
   template:
     metadata:
       labels:
         app: registration-service
+        color: ${DEPLOY_COLOR}
     spec:
       containers:
         - name: registration-service
@@ -71,10 +76,14 @@ kind: Service
 metadata:
   name: registration-service
   namespace: events-platform
+  labels:
+    app: registration-service
 spec:
   selector:
     app: registration-service
+    color: ${DEPLOY_COLOR}
   ports:
-    - port: 4003
+    - name: http
+      port: 4003
       targetPort: 4003
   type: ClusterIP

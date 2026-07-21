@@ -27,6 +27,8 @@ done
 NAMESPACE="events-platform"
 ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io"
 export ACR_LOGIN_SERVER  # used by envsubst below
+export DEPLOY_COLOR="blue"  # this script only ever bootstraps the initial "blue" color; the
+                             # deploy-aks.yml workflow owns blue/green rotation after that
 
 echo "==> Resource group: $RESOURCE_GROUP"
 if ! az group show --name "$RESOURCE_GROUP" >/dev/null 2>&1; then
@@ -103,6 +105,12 @@ echo "==> Rendering and applying service manifests"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 for tpl in "$SCRIPT_DIR"/*.yaml.tpl; do
+  # ServiceMonitor needs the CRD from kube-prometheus-stack (./install-monitoring.sh);
+  # skip it here if that hasn't been installed yet so a fresh deploy doesn't fail.
+  if [[ "$(basename "$tpl")" == "09-monitoring.yaml.tpl" ]] && ! kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+    echo "  (skipping 09-monitoring.yaml.tpl: ServiceMonitor CRD not installed — run ./install-monitoring.sh first)"
+    continue
+  fi
   out="$TMP_DIR/$(basename "${tpl%.tpl}")"
   envsubst < "$tpl" > "$out"
   kubectl apply -f "$out"
@@ -110,11 +118,11 @@ done
 
 echo "==> Waiting for deployments to be ready"
 kubectl -n "$NAMESPACE" rollout status deployment/clickhouse --timeout=180s
-kubectl -n "$NAMESPACE" rollout status deployment/event-service --timeout=180s
-kubectl -n "$NAMESPACE" rollout status deployment/program-service --timeout=180s
-kubectl -n "$NAMESPACE" rollout status deployment/registration-service --timeout=180s
-kubectl -n "$NAMESPACE" rollout status deployment/analytics-service --timeout=180s
-kubectl -n "$NAMESPACE" rollout status deployment/frontend --timeout=180s
+kubectl -n "$NAMESPACE" rollout status deployment/event-service-blue --timeout=180s
+kubectl -n "$NAMESPACE" rollout status deployment/program-service-blue --timeout=180s
+kubectl -n "$NAMESPACE" rollout status deployment/registration-service-blue --timeout=180s
+kubectl -n "$NAMESPACE" rollout status deployment/analytics-service-blue --timeout=180s
+kubectl -n "$NAMESPACE" rollout status deployment/frontend-blue --timeout=180s
 
 echo "==> Running database migrations"
 kubectl -n "$NAMESPACE" delete job event-service-migrate program-service-migrate registration-service-migrate analytics-service-migrate --ignore-not-found

@@ -137,7 +137,18 @@ jobs:
             --from-literal=SENDGRID_API_KEY="${{ secrets.SENDGRID_API_KEY }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Render & apply manifest
+      - name: Determine live/idle color
+        id: color
+        run: |
+          CURRENT_COLOR=$(kubectl -n "$NAMESPACE" get service "${{ matrix.service }}" \
+            -o jsonpath='{.spec.selector.color}' 2>/dev/null || true)
+          DEPLOY_COLOR="blue"
+          [ "$CURRENT_COLOR" = "blue" ] && DEPLOY_COLOR="green"
+          echo "  current color: ${CURRENT_COLOR:-<none>} -> deploying: $DEPLOY_COLOR"
+          echo "CURRENT_COLOR=$CURRENT_COLOR" >> "$GITHUB_ENV"
+          echo "DEPLOY_COLOR=$DEPLOY_COLOR" >> "$GITHUB_ENV"
+
+      - name: Render & apply Deployment (idle color only)
         shell: bash
         run: |
           declare -A tpl=(
@@ -153,8 +164,30 @@ jobs:
           export ALERT_EMAIL_FROM="${{ vars.ALERT_EMAIL_FROM }}"
           export ALERT_EMAIL_TO="${{ vars.ALERT_EMAIL_TO }}"
           export LOW_SEATS_THRESHOLD="${{ vars.LOW_SEATS_THRESHOLD }}"
-          envsubst < "${tpl[${{ matrix.service }}]}" | kubectl apply -f -
+          export DEPLOY_COLOR="$DEPLOY_COLOR"
+          # Apply everything except the Service so the live selector is never
+          # touched by this step - cutover happens explicitly below once the
+          # new color is confirmed ready.
+          envsubst < "${tpl[${{ matrix.service }}]}" | yq eval 'select(.kind != "Service")' - | kubectl apply -f -
 
-      - name: Wait for rollout
+      - name: Wait for rollout (idle color)
         run: |
-          kubectl -n "$NAMESPACE" rollout status "deployment/${{ matrix.service }}" --timeout=180s
+          kubectl -n "$NAMESPACE" rollout status "deployment/${{ matrix.service }}-$DEPLOY_COLOR" --timeout=180s
+
+      - name: Smoke test idle color
+        run: |
+          POD=$(kubectl -n "$NAMESPACE" get pod -l "app=${{ matrix.service }},color=$DEPLOY_COLOR" \
+            -o jsonpath='{.items[0].metadata.name}')
+          PORT=$(kubectl -n "$NAMESPACE" get pod "$POD" -o jsonpath='{.spec.containers[0].ports[0].containerPort}')
+          kubectl -n "$NAMESPACE" exec "$POD" -- wget -q -O- "http://localhost:${PORT}/health" \
+            || kubectl -n "$NAMESPACE" exec "$POD" -- wget -q -O- "http://localhost:${PORT}/"
+
+      - name: Cut traffic over to the new color
+        run: |
+          kubectl -n "$NAMESPACE" patch service "${{ matrix.service }}" \
+            -p "{\"spec\":{\"selector\":{\"app\":\"${{ matrix.service }}\",\"color\":\"$DEPLOY_COLOR\"}}}"
+
+      - name: Scale down the previous color
+        if: env.CURRENT_COLOR != '' && env.CURRENT_COLOR != env.DEPLOY_COLOR
+        run: |
+          kubectl -n "$NAMESPACE" scale deployment "${{ matrix.service }}-$CURRENT_COLOR" --replicas=0

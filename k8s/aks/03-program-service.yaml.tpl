@@ -13,17 +13,22 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: program-service
+  name: program-service-${DEPLOY_COLOR}
   namespace: events-platform
+  labels:
+    app: program-service
+    color: ${DEPLOY_COLOR}
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: program-service
+      color: ${DEPLOY_COLOR}
   template:
     metadata:
       labels:
         app: program-service
+        color: ${DEPLOY_COLOR}
     spec:
       containers:
         - name: program-service
@@ -70,10 +75,14 @@ kind: Service
 metadata:
   name: program-service
   namespace: events-platform
+  labels:
+    app: program-service
 spec:
   selector:
     app: program-service
+    color: ${DEPLOY_COLOR}
   ports:
-    - port: 4002
+    - name: http
+      port: 4002
       targetPort: 4002
   type: ClusterIP

@@ -11,17 +11,22 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: analytics-service
+  name: analytics-service-${DEPLOY_COLOR}
   namespace: events-platform
+  labels:
+    app: analytics-service
+    color: ${DEPLOY_COLOR}
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: analytics-service
+      color: ${DEPLOY_COLOR}
   template:
     metadata:
       labels:
         app: analytics-service
+        color: ${DEPLOY_COLOR}
     spec:
       containers:
         - name: analytics-service
@@ -68,10 +73,14 @@ kind: Service
 metadata:
   name: analytics-service
   namespace: events-platform
+  labels:
+    app: analytics-service
 spec:
   selector:
     app: analytics-service
+    color: ${DEPLOY_COLOR}
   ports:
-    - port: 4004
+    - name: http
+      port: 4004
       targetPort: 4004
   type: ClusterIP

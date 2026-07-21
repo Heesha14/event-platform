@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const registrationsRouter = require('./routes/registrations');
 const db = require('./db');
+const { metricsMiddleware, metricsHandler } = require('./metrics');
 
 const app = express();
 const PORT = process.env.PORT || 4003;
@@ -13,6 +14,9 @@ app.use(helmet());
 app.use(cors());
 app.use(morgan('combined'));
 app.use(express.json());
+app.use(metricsMiddleware);
+
+app.get('/metrics', metricsHandler);
 
 app.get('/health', async (req, res) => {
   try {

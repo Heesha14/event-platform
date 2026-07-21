@@ -61,10 +61,13 @@ kind: Service
 metadata:
   name: analytics-service
   namespace: events-platform
+  labels:
+    app: analytics-service
 spec:
   selector:
     app: analytics-service
   ports:
-    - port: 4004
+    - name: http
+      port: 4004
       targetPort: 4004
   type: ClusterIP

@@ -1,17 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend
+  name: frontend-${DEPLOY_COLOR}
   namespace: events-platform
+  labels:
+    app: frontend
+    color: ${DEPLOY_COLOR}
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: frontend
+      color: ${DEPLOY_COLOR}
   template:
     metadata:
       labels:
         app: frontend
+        color: ${DEPLOY_COLOR}
     spec:
       containers:
         - name: frontend
@@ -47,6 +52,7 @@ metadata:
 spec:
   selector:
     app: frontend
+    color: ${DEPLOY_COLOR}
   ports:
     - port: 80
       targetPort: 80

@@ -119,10 +119,106 @@ straight past the `az acr build` output (or just comment out the four
 
 ```bash
 az acr build --registry $ACR_NAME --image event-service:v1 ../../event-service
-kubectl -n events-platform rollout restart deployment/event-service
+kubectl -n events-platform rollout restart deployment/event-service-blue
 ```
 (swap in the other service names as needed; bump `IMAGE_TAG` in `aks.env`
 if you want distinct, non-overwritten tags per release)
+
+Note: `deploy-aks.sh` only ever bootstraps/re-applies the `blue` color. Routine
+production deploys go through `.github/workflows/deploy-aks.yml`, which owns
+the blue/green rotation described below.
+
+## Blue/green deploys (production path)
+
+Each backend service and the frontend run as two Deployments,
+`<service>-blue` and `<service>-green`, sharing one stable Service. Only one
+color is "live" at a time — the Service's `color` selector says which. The
+GitHub Actions workflow (`.github/workflows/deploy-aks.yml`) does the
+rotation on every push to `master` that touches a given service:
+
+1. Reads the live color off the Service (`kubectl get service <svc> -o
+   jsonpath='{.spec.selector.color}'`) and computes the idle color as the
+   opposite (defaults to `blue` the first time a service has no color yet).
+2. Renders and applies only the Deployment for the idle color (the Service
+   is deliberately left untouched at this step).
+3. Waits for that Deployment's rollout and readiness, then runs a smoke test
+   against one of its pods.
+4. Patches the Service's selector to the idle color — this is the traffic
+   cutover, and it's instant.
+5. Scales the previous color's Deployment to 0 replicas (kept around, not
+   deleted, so rollback doesn't require a rebuild).
+
+**Manual rollback** after a bad cutover:
+
+```bash
+kubectl -n events-platform scale deployment event-service-blue --replicas=2
+kubectl -n events-platform rollout status deployment/event-service-blue --timeout=180s
+kubectl -n events-platform patch service event-service \
+  -p '{"spec":{"selector":{"app":"event-service","color":"blue"}}}'
+```
+(swap `blue` for whichever color was previously live, and the service name
+as needed)
+
+**Database migrations stay shared** — there's one Azure SQL DB and one
+ClickHouse instance, not one per color, and `05-migration-jobs.yaml.tpl` has
+no color awareness. Because both the blue and green Deployments of a service
+can briefly (or, if cutover is delayed, not-so-briefly) run against the same
+schema, migrations must follow an **expand/contract** pattern:
+- Ship additive-only changes (new nullable columns/tables, new code that can
+  read both old and new shapes) in the deploy that introduces them.
+- Only drop or rename columns/tables in a later, separate deploy, once
+  you've confirmed the old color is fully retired and no pod anywhere still
+  depends on the old shape.
+
+This is a process discipline, not something enforced by tooling — `node
+src/migrate.js` per service still just runs whatever's in `schema.sql`.
+
+Local minikube (`k8s/*.yaml`, non-templated) deliberately has none of this —
+single color, plain rolling-update Deployments — since there's no real
+traffic-cutover benefit on a single-node dev cluster.
+
+## Monitoring: Prometheus + Grafana
+
+Self-hosted `kube-prometheus-stack` (Prometheus + Grafana), sized down to
+fit the small node pool used here. Each of event-service, program-service,
+registration-service, and analytics-service exposes a `/metrics` endpoint
+(via `prom-client`) alongside its existing `/health` endpoint.
+
+```bash
+./install-monitoring.sh
+```
+
+This installs the Helm chart into a new `monitoring` namespace using
+`monitoring-values.yaml` (1 replica each for Prometheus/Grafana, 5-day
+retention, small 8Gi PVC, Alertmanager and unreachable control-plane
+scrape targets disabled). Re-run `./deploy-aks.sh` afterward (or apply
+`09-monitoring.yaml.tpl` directly) so the four `ServiceMonitor` resources
+get applied now that their CRD exists — `deploy-aks.sh` skips that file
+automatically until `install-monitoring.sh` has run.
+
+Reach Grafana via port-forward (no public IP, no extra cost):
+
+```bash
+kubectl -n monitoring port-forward svc/monitoring-grafana 3000:80
+```
+
+Then open `http://localhost:3000` (user `admin`). Get the generated
+password with:
+
+```bash
+kubectl -n monitoring get secret monitoring-grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo
+```
+
+Prometheus is auto-provisioned as a Grafana datasource. Once the
+ServiceMonitors are applied, query `up{namespace="events-platform"}` in
+Grafana's Explore tab to confirm all four services are being scraped.
+
+To remove it:
+
+```bash
+helm uninstall monitoring -n monitoring
+kubectl delete namespace monitoring
+```
 
 ## Cleaning up (to avoid ongoing charges)
 

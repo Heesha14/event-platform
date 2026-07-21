@@ -16,17 +16,22 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: event-service
+  name: event-service-${DEPLOY_COLOR}
   namespace: events-platform
+  labels:
+    app: event-service
+    color: ${DEPLOY_COLOR}
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: event-service
+      color: ${DEPLOY_COLOR}
   template:
     metadata:
       labels:
         app: event-service
+        color: ${DEPLOY_COLOR}
     spec:
       containers:
         - name: event-service
@@ -78,10 +83,14 @@ kind: Service
 metadata:
   name: event-service
   namespace: events-platform
+  labels:
+    app: event-service
 spec:
   selector:
     app: event-service
+    color: ${DEPLOY_COLOR}
   ports:
-    - port: 4001
+    - name: http
+      port: 4001
       targetPort: 4001
   type: ClusterIP

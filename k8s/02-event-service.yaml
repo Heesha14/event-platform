@@ -67,10 +67,13 @@ kind: Service
 metadata:
   name: event-service
   namespace: events-platform
+  labels:
+    app: event-service
 spec:
   selector:
     app: event-service
   ports:
-    - port: 4001
+    - name: http
+      port: 4001
       targetPort: 4001
   type: ClusterIP

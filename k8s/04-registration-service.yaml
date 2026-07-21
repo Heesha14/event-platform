@@ -65,10 +65,13 @@ kind: Service
 metadata:
   name: registration-service
   namespace: events-platform
+  labels:
+    app: registration-service
 spec:
   selector:
     app: registration-service
   ports:
-    - port: 4003
+    - name: http
+      port: 4003
       targetPort: 4003
   type: ClusterIP
