@@ -5,6 +5,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+k8s/aks/aks.env
 
 # Logs
 logs/

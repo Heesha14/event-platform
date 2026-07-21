@@ -22,7 +22,7 @@ name: Build & Deploy to AKS
 #   3. Set repo Secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
 #      SENDGRID_API_KEY
 #      Set repo Variables (Settings > Actions > Variables): RESOURCE_GROUP,
-#      AKS_CLUSTER_NAME, ACR_NAME, ALERT_EMAIL_FROM, ALERT_EMAIL_TO,
+#      AKS_CLUSTER_NAME, ACR_NAME, SQL_HOST, ALERT_EMAIL_FROM, ALERT_EMAIL_TO,
 #      LOW_SEATS_THRESHOLD (same values as k8s/aks/aks.env).
 #
 # Note: this workflow does not run database migrations automatically. After
@@ -149,6 +149,7 @@ jobs:
           )
           export ACR_LOGIN_SERVER="${{ vars.ACR_NAME }}.azurecr.io"
           export IMAGE_TAG="${{ github.sha }}"
+          export SQL_HOST="${{ vars.SQL_HOST }}"
           export ALERT_EMAIL_FROM="${{ vars.ALERT_EMAIL_FROM }}"
           export ALERT_EMAIL_TO="${{ vars.ALERT_EMAIL_TO }}"
           export LOW_SEATS_THRESHOLD="${{ vars.LOW_SEATS_THRESHOLD }}"
