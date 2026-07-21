@@ -16,7 +16,7 @@ name: Build & Deploy to AKS
 #        az ad app federated-credential create --id <appId> --parameters '{
 #          "name": "gha-main",
 #          "issuer": "https://token.actions.githubusercontent.com",
-#          "subject": "repo:<org>/<repo>:ref:refs/heads/main",
+#          "subject": "repo:<org>/<repo>:ref:refs/heads/master",
 #          "audiences": ["api://AzureADTokenExchange"]
 #        }'
 #   3. Set repo Secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
@@ -29,7 +29,7 @@ name: Build & Deploy to AKS
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "event-service/**"
       - "program-service/**"
