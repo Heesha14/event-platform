@@ -1,0 +1,97 @@
+# In-cluster ClickHouse backing analytics-service. Unlike the SQL Server-
+# backed services, this isn't a stand-in for a real Azure resource —
+# analytics data is analytical/append-only, so ClickHouse runs in-cluster
+# the same way on minikube and AKS.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: clickhouse-secret
+  namespace: events-platform
+type: Opaque
+stringData:
+  CLICKHOUSE_USER: default
+  CLICKHOUSE_PASSWORD: localdevpassword
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-config
+  namespace: events-platform
+data:
+  CLICKHOUSE_DB: analytics
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: clickhouse-pvc
+  namespace: events-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clickhouse
+  namespace: events-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickhouse
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: clickhouse
+    spec:
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:24.8-alpine
+          ports:
+            - containerPort: 8123
+            - containerPort: 9000
+          envFrom:
+            - configMapRef:
+                name: clickhouse-config
+            - secretRef:
+                name: clickhouse-secret
+          volumeMounts:
+            - name: clickhouse-storage
+              mountPath: /var/lib/clickhouse
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: clickhouse-storage
+          persistentVolumeClaim:
+            claimName: clickhouse-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: events-platform
+spec:
+  selector:
+    app: clickhouse
+  ports:
+    - name: http
+      port: 8123
+      targetPort: 8123
+    - name: native
+      port: 9000
+      targetPort: 9000

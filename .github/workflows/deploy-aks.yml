@@ -1,0 +1,143 @@
+name: Build & Deploy to AKS
+
+# Rebuilds only the services whose source changed in this push, pushes new
+# images to Azure Container Registry, and rolls the matching AKS Deployments
+# forward. Unchanged services are left running as-is.
+#
+# One-time setup required before this workflow can run:
+#   1. Provision the infra manually once with k8s/aks/deploy-aks.sh (creates
+#      the resource group, ACR, AKS cluster, namespace, and the
+#      azure-db-credentials / clickhouse-credentials Secrets).
+#   2. Create an Azure AD app registration for OIDC login and grant it
+#      "AcrPush" on the ACR and "Azure Kubernetes Service Cluster User Role"
+#      (or Contributor) on the AKS cluster / resource group, e.g.:
+#        az ad app create --display-name event-platform-gha
+#        az ad sp create --id <appId>
+#        az ad app federated-credential create --id <appId> --parameters '{
+#          "name": "gha-main",
+#          "issuer": "https://token.actions.githubusercontent.com",
+#          "subject": "repo:<org>/<repo>:ref:refs/heads/main",
+#          "audiences": ["api://AzureADTokenExchange"]
+#        }'
+#   3. Set repo Secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+#      Set repo Variables (Settings > Actions > Variables): RESOURCE_GROUP,
+#      AKS_CLUSTER_NAME, ACR_NAME (same values as k8s/aks/aks.env).
+#
+# Note: this workflow does not run database migrations automatically. After
+# a deploy that includes schema changes, run the migration step from
+# k8s/aks/deploy-aks.sh manually against the cluster.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "event-service/**"
+      - "program-service/**"
+      - "registration-service/**"
+      - "analytics-service/**"
+      - "frontend/**"
+      - "k8s/aks/**"
+      - ".github/workflows/deploy-aks.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.build-matrix.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            event-service:
+              - 'event-service/**'
+            program-service:
+              - 'program-service/**'
+            registration-service:
+              - 'registration-service/**'
+            analytics-service:
+              - 'analytics-service/**'
+            frontend:
+              - 'frontend/**'
+
+      - id: build-matrix
+        shell: bash
+        run: |
+          declare -A changed=(
+            [event-service]="${{ steps.filter.outputs.event-service }}"
+            [program-service]="${{ steps.filter.outputs.program-service }}"
+            [registration-service]="${{ steps.filter.outputs.registration-service }}"
+            [analytics-service]="${{ steps.filter.outputs.analytics-service }}"
+            [frontend]="${{ steps.filter.outputs.frontend }}"
+          )
+          services=()
+          for name in event-service program-service registration-service analytics-service frontend; do
+            if [ "${changed[$name]}" = "true" ]; then
+              services+=("\"$name\"")
+            fi
+          done
+          json="[$(IFS=,; echo "${services[*]}")]"
+          echo "Changed services: $json"
+          echo "services=$json" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    env:
+      NAMESPACE: events-platform
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build & push image via ACR Tasks
+        run: |
+          az acr build \
+            --registry "${{ vars.ACR_NAME }}" \
+            --image "${{ matrix.service }}:${{ github.sha }}" \
+            --image "${{ matrix.service }}:latest" \
+            "${{ matrix.service }}"
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --name "${{ vars.AKS_CLUSTER_NAME }}" \
+            --resource-group "${{ vars.RESOURCE_GROUP }}" \
+            --overwrite-existing
+
+      - name: Render & apply manifest
+        shell: bash
+        run: |
+          declare -A tpl=(
+            [event-service]="k8s/aks/02-event-service.yaml.tpl"
+            [program-service]="k8s/aks/03-program-service.yaml.tpl"
+            [registration-service]="k8s/aks/04-registration-service.yaml.tpl"
+            [frontend]="k8s/aks/06-frontend.yaml.tpl"
+            [analytics-service]="k8s/aks/08-analytics-service.yaml.tpl"
+          )
+          export ACR_LOGIN_SERVER="${{ vars.ACR_NAME }}.azurecr.io"
+          export IMAGE_TAG="${{ github.sha }}"
+          envsubst < "${tpl[${{ matrix.service }}]}" | kubectl apply -f -
+
+      - name: Wait for rollout
+        run: |
+          kubectl -n "$NAMESPACE" rollout status "deployment/${{ matrix.service }}" --timeout=180s

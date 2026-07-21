@@ -1,0 +1,307 @@
+{
+  "info": {
+    "name": "Event Platform Microservices",
+    "description": "Event Service, Program Service, Registration Service, and Analytics Service. Run 'Create Event' first — its test script saves {{eventId}} for use by the rest of the requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Checks",
+      "item": [
+        { "name": "Event Service Health", "request": { "method": "GET", "url": "{{eventBaseUrl}}/health" } },
+        { "name": "Program Service Health", "request": { "method": "GET", "url": "{{programBaseUrl}}/health" } },
+        { "name": "Registration Service Health", "request": { "method": "GET", "url": "{{registrationBaseUrl}}/health" } },
+        { "name": "Analytics Service Health", "request": { "method": "GET", "url": "{{analyticsBaseUrl}}/health" } }
+      ]
+    },
+    {
+      "name": "Event Service",
+      "item": [
+        {
+          "name": "Create Event",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('eventId', body.eventId);",
+                  "console.log('Saved eventId =', body.eventId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{eventBaseUrl}}/events",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"CloudCon 2026\",\n  \"venue\": \"BMICH, Colombo\",\n  \"dateTime\": \"2026-09-15T09:00:00Z\",\n  \"ticketPrice\": 25.00,\n  \"capacity\": 100\n}"
+            }
+          }
+        },
+        {
+          "name": "List Events",
+          "request": { "method": "GET", "url": "{{eventBaseUrl}}/events" }
+        },
+        {
+          "name": "List Upcoming Events",
+          "request": { "method": "GET", "url": "{{eventBaseUrl}}/events?upcoming=true" }
+        },
+        {
+          "name": "Get Event by ID",
+          "request": { "method": "GET", "url": "{{eventBaseUrl}}/events/{{eventId}}" }
+        },
+        {
+          "name": "Update Event",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{eventBaseUrl}}/events/{{eventId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticketPrice\": 30.00\n}"
+            }
+          }
+        },
+        {
+          "name": "Reserve Seats (internal)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{eventBaseUrl}}/events/{{eventId}}/seats",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"delta\": -2\n}"
+            }
+          }
+        },
+        {
+          "name": "Release Seats (internal)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{eventBaseUrl}}/events/{{eventId}}/seats",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"delta\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Event",
+          "request": { "method": "DELETE", "url": "{{eventBaseUrl}}/events/{{eventId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Program Service",
+      "item": [
+        {
+          "name": "Create Program",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('programId', body.programId);",
+                  "console.log('Saved programId =', body.programId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{programBaseUrl}}/programs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": {{eventId}},\n  \"day\": \"2026-09-15\",\n  \"track\": \"Cloud Computing Track\",\n  \"session\": \"Intro to Kubernetes\",\n  \"speakerName\": \"Jane Doe\",\n  \"startTime\": \"09:30\",\n  \"endTime\": \"10:30\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Programs",
+          "request": { "method": "GET", "url": "{{programBaseUrl}}/programs" }
+        },
+        {
+          "name": "List Programs by Event",
+          "request": { "method": "GET", "url": "{{programBaseUrl}}/programs?eventId={{eventId}}" }
+        },
+        {
+          "name": "List Programs by Track",
+          "request": { "method": "GET", "url": "{{programBaseUrl}}/programs?track=Cloud Computing Track" }
+        },
+        {
+          "name": "Get Program by ID",
+          "request": { "method": "GET", "url": "{{programBaseUrl}}/programs/{{programId}}" }
+        },
+        {
+          "name": "Update Program",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{programBaseUrl}}/programs/{{programId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"speakerName\": \"Jane R. Doe\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Program",
+          "request": { "method": "DELETE", "url": "{{programBaseUrl}}/programs/{{programId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Registration Service",
+      "item": [
+        {
+          "name": "Create Registration",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.environment.set('registrationId', body.registrationId);",
+                  "console.log('Saved registrationId =', body.registrationId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{registrationBaseUrl}}/registrations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": {{eventId}},\n  \"name\": \"John Smith\",\n  \"email\": \"john@example.com\",\n  \"ticketCount\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "List Registrations",
+          "request": { "method": "GET", "url": "{{registrationBaseUrl}}/registrations" }
+        },
+        {
+          "name": "List Registrations by Event",
+          "request": { "method": "GET", "url": "{{registrationBaseUrl}}/registrations?eventId={{eventId}}" }
+        },
+        {
+          "name": "List Registrations by Email",
+          "request": { "method": "GET", "url": "{{registrationBaseUrl}}/registrations?email=john@example.com" }
+        },
+        {
+          "name": "Get Registration by ID",
+          "request": { "method": "GET", "url": "{{registrationBaseUrl}}/registrations/{{registrationId}}" }
+        },
+        {
+          "name": "Cancel Registration (releases seats)",
+          "request": { "method": "DELETE", "url": "{{registrationBaseUrl}}/registrations/{{registrationId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Analytics Service",
+      "item": [
+        {
+          "name": "Track Event View",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{analyticsBaseUrl}}/track",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventType\": \"event_view\",\n  \"eventId\": {{eventId}},\n  \"sessionId\": \"demo-session-1\",\n  \"referrer\": \"https://example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Track Ticket Interest",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{analyticsBaseUrl}}/track",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventType\": \"ticket_interest\",\n  \"eventId\": {{eventId}},\n  \"sessionId\": \"demo-session-1\",\n  \"ticketCount\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "Track Registration Started",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{analyticsBaseUrl}}/track",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventType\": \"registration_started\",\n  \"eventId\": {{eventId}},\n  \"sessionId\": \"demo-session-1\",\n  \"ticketCount\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "Track Registration Completed",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{analyticsBaseUrl}}/track",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventType\": \"registration_completed\",\n  \"eventId\": {{eventId}},\n  \"sessionId\": \"demo-session-1\",\n  \"ticketCount\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Event Summary",
+          "request": { "method": "GET", "url": "{{analyticsBaseUrl}}/track/{{eventId}}/summary" }
+        }
+      ]
+    },
+    {
+      "name": "Error Case Examples",
+      "item": [
+        {
+          "name": "Create Event - Missing Fields (expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{eventBaseUrl}}/events",
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Incomplete Event\"\n}" }
+          }
+        },
+        {
+          "name": "Register - Event Not Found (expect 404)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{registrationBaseUrl}}/registrations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": 999999,\n  \"name\": \"Nobody\",\n  \"email\": \"nobody@example.com\",\n  \"ticketCount\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Register - Overbook (expect 409)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{registrationBaseUrl}}/registrations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventId\": {{eventId}},\n  \"name\": \"Big Group\",\n  \"email\": \"biggroup@example.com\",\n  \"ticketCount\": 9999\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

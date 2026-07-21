@@ -1,0 +1,85 @@
+version: "3.9"
+
+# Local orchestration for the three microservices. All three connect out to
+# the same Azure SQL Database server AND the same database (eventsdb) to
+# avoid needing multiple databases for local dev. Table names don't collide
+# across services, so this is safe. Fill in the shared Azure connection
+# details below, or create a .env file next to this compose file.
+services:
+  event-service:
+    build: ./event-service
+    ports:
+      - "4001:4001"
+    environment:
+      PORT: 4001
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-1433}
+      DB_NAME: eventsdb
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_ENCRYPT: "true"
+
+  program-service:
+    build: ./program-service
+    ports:
+      - "4002:4002"
+    environment:
+      PORT: 4002
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-1433}
+      DB_NAME: eventsdb
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_ENCRYPT: "true"
+
+  registration-service:
+    build: ./registration-service
+    ports:
+      - "4003:4003"
+    environment:
+      PORT: 4003
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-1433}
+      DB_NAME: eventsdb
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_ENCRYPT: "true"
+      EVENT_SERVICE_URL: http://event-service:4001
+    depends_on:
+      - event-service
+
+  # ClickHouse backs the analytics-service below. Unlike the three services
+  # above, this runs locally rather than against Azure SQL Database since it's
+  # purely for event analytics, not transactional data.
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-analytics}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+
+  analytics-service:
+    build: ./analytics-service
+    ports:
+      - "4004:4004"
+    environment:
+      PORT: 4004
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-analytics}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+    depends_on:
+      - clickhouse
+
+volumes:
+  clickhouse-data:

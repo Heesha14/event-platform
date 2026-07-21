@@ -1,0 +1,121 @@
+# One-shot Jobs that apply each service's schema.sql to its database.
+# Re-running is safe: schema.sql uses CREATE TABLE IF NOT EXISTS.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: event-service-migrate
+  namespace: events-platform
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: event-service:local
+          imagePullPolicy: Never
+          command: ["node", "src/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: event-service-config
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mssql-secret
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mssql-secret
+                  key: DB_PASSWORD
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: program-service-migrate
+  namespace: events-platform
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: program-service:local
+          imagePullPolicy: Never
+          command: ["node", "src/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: program-service-config
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mssql-secret
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mssql-secret
+                  key: DB_PASSWORD
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: analytics-service-migrate
+  namespace: events-platform
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: analytics-service:local
+          imagePullPolicy: Never
+          command: ["node", "src/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: analytics-service-config
+          env:
+            - name: CLICKHOUSE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-secret
+                  key: CLICKHOUSE_USER
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-secret
+                  key: CLICKHOUSE_PASSWORD
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: registration-service-migrate
+  namespace: events-platform
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: registration-service:local
+          imagePullPolicy: Never
+          command: ["node", "src/migrate.js"]
+          envFrom:
+            - configMapRef:
+                name: registration-service-config
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mssql-secret
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mssql-secret
+                  key: DB_PASSWORD

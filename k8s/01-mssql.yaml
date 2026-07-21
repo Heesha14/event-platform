@@ -1,0 +1,121 @@
+# In-cluster SQL Server used ONLY for local minikube testing.
+# It creates the same single shared database (eventsdb) that the three
+# services also share on the real Azure SQL Database server, so application
+# code and schema.sql files don't change between local and Azure.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mssql-secret
+  namespace: events-platform
+type: Opaque
+stringData:
+  MSSQL_SA_PASSWORD: LocalDevPassw0rd!
+  DB_USER: sa
+  DB_PASSWORD: LocalDevPassw0rd!
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mssql-pvc
+  namespace: events-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mssql
+  namespace: events-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mssql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mssql
+    spec:
+      containers:
+        - name: mssql
+          image: mcr.microsoft.com/mssql/server:2022-latest
+          ports:
+            - containerPort: 1433
+          env:
+            - name: ACCEPT_EULA
+              value: "Y"
+            - name: MSSQL_PID
+              value: Developer
+          envFrom:
+            - secretRef:
+                name: mssql-secret
+          volumeMounts:
+            - name: mssql-storage
+              mountPath: /var/opt/mssql
+          readinessProbe:
+            tcpSocket:
+              port: 1433
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 1433
+            initialDelaySeconds: 20
+            periodSeconds: 10
+      volumes:
+        - name: mssql-storage
+          persistentVolumeClaim:
+            claimName: mssql-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mssql
+  namespace: events-platform
+spec:
+  selector:
+    app: mssql
+  ports:
+    - port: 1433
+      targetPort: 1433
+---
+# One-shot Job that creates the three application databases once SQL Server
+# is accepting connections. The SQL Server image has no docker-entrypoint-
+# initdb.d equivalent, so this replaces what a ConfigMap-driven init script
+# did for the old in-cluster Postgres.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mssql-init-db
+  namespace: events-platform
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init-db
+          image: mcr.microsoft.com/mssql-tools18:latest
+          env:
+            - name: MSSQL_SA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mssql-secret
+                  key: MSSQL_SA_PASSWORD
+          command:
+            - /bin/bash
+            - -c
+            - |
+              until /opt/mssql-tools18/bin/sqlcmd -S mssql -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" >/dev/null 2>&1; do
+                echo "Waiting for SQL Server to accept connections..."
+                sleep 5
+              done
+              /opt/mssql-tools18/bin/sqlcmd -S mssql -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "
+                IF DB_ID('eventsdb') IS NULL CREATE DATABASE eventsdb;
+              "
