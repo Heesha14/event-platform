@@ -109,13 +109,16 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build & push image via ACR Tasks
+      - name: Build & push image via local Docker (az acr build is blocked on this subscription)
         run: |
-          az acr build \
-            --registry "${{ vars.ACR_NAME }}" \
-            --image "${{ matrix.service }}:${{ github.sha }}" \
-            --image "${{ matrix.service }}:latest" \
+          ACR_LOGIN_SERVER="${{ vars.ACR_NAME }}.azurecr.io"
+          az acr login --name "${{ vars.ACR_NAME }}"
+          docker build \
+            -t "$ACR_LOGIN_SERVER/${{ matrix.service }}:${{ github.sha }}" \
+            -t "$ACR_LOGIN_SERVER/${{ matrix.service }}:latest" \
             "${{ matrix.service }}"
+          docker push "$ACR_LOGIN_SERVER/${{ matrix.service }}:${{ github.sha }}"
+          docker push "$ACR_LOGIN_SERVER/${{ matrix.service }}:latest"
 
       - name: Get AKS credentials
         run: |
